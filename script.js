@@ -21,7 +21,7 @@ function startListening() {
             }else if (command.includes("money")) {
                 window.location.href = "money.html"; // Redirect to user.html
             }else if (command.includes("describe")) {
-                window.location.href = "color.html"; // Redirect to user.html
+                window.location.href = "describe.html"; // Redirect to user.html
             }
 
              else {
