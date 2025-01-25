@@ -10,12 +10,15 @@ function startListening() {
             const command = event.results[0][0].transcript.toLowerCase();
             console.log("Command received: " + command);
 
-            if (command.includes("object detection")) {
+            if (command.includes("object")) {
                 window.location.href = "object.html"; // Redirect to object.html
-            } else if (command.includes("navigation")) {
+            } else if (command.includes("message")) {
                 window.location.href = "user.html"; // Redirect to user.html
-            } else {
-                alert("Command not recognized. Please say 'Object Detection' or 'Navigation'.");
+            }else if (command.includes("navigation")) {
+                window.location.href = "map.html"; // Redirect to user.html
+            }
+             else {
+                alert("Command not recognized. Please say 'Object Detection' or 'send messeage'.");
             }
         };
 

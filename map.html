@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Accessible Route Navigator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDNKaWDMEbgOlQsunebgM0o87wzAlxq1A0&libraries=places" async defer></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col items-center justify-center p-4">
+    <div class="container mx-auto max-w-xl bg-white shadow-2xl rounded-2xl p-8 space-y-6">
+        <h1 class="text-3xl font-bold text-center text-blue-600 mb-6">Accessible Route Navigator</h1>
+
+        <div class="space-y-4">
+            <!-- Location Section -->
+            <div class="bg-gray-50 p-4 rounded-lg">
+                <h2 class="text-xl font-semibold mb-3">Current Location</h2>
+                <div class="flex space-x-2">
+                    <input id="start-lat" type="text" readonly 
+                        class="w-1/2 bg-gray-200 p-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                        placeholder="Latitude">
+                    <input id="start-lng" type="text" readonly 
+                        class="w-1/2 bg-gray-200 p-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                        placeholder="Longitude">
+                </div>
+                <p id="location-description" class="mt-2 text-sm text-gray-600"></p>
+            </div>
+
+            <!-- Destination Input Section -->
+            <div class="bg-gray-50 p-4 rounded-lg">
+                <h2 class="text-xl font-semibold mb-3">Destination</h2>
+                <div class="flex space-x-2">
+                    <input id="end-address" type="text" 
+                        class="flex-grow p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                        placeholder="Speak or type destination">
+                    
+                    <button id="mic-btn" onclick="toggleMicrophone()" 
+                        class="bg-blue-500 text-white p-2 rounded hover:bg-blue-600 transition duration-300">
+                        🎤 Mic
+                    </button>
+                </div>
+            </div>
+
+            <!-- Route Generation Section -->
+            <div class="flex space-x-2">
+                <button id="route-btn" onclick="calculateAndSpeakDetailedRoute()" 
+                    class="flex-grow bg-green-500 text-white p-3 rounded hover:bg-green-600 transition duration-300 disabled:opacity-50" 
+                    disabled>
+                    Generate Walking Route
+                </button>
+            </div>
+
+            <!-- Voice Controls -->
+            <div id="voice-controls" class="hidden space-y-4">
+                <div class="flex space-x-2">
+                    <button onclick="pauseDirections()" 
+                        class="flex-grow bg-yellow-500 text-white p-2 rounded hover:bg-yellow-600 transition duration-300">
+                        ⏸️ Pause Directions
+                    </button>
+                    <button onclick="resumeDirections()" 
+                        class="flex-grow bg-green-500 text-white p-2 rounded hover:bg-green-600 transition duration-300">
+                        ▶️ Resume
+                    </button>
+                    <button onclick="repeatDirections()" 
+                        class="flex-grow bg-blue-500 text-white p-2 rounded hover:bg-blue-600 transition duration-300">
+                        🔁 Repeat Directions
+                    </button>
+                    <button onclick="speakNextStep()" 
+                        class="flex-grow bg-purple-500 text-white p-2 rounded hover:bg-purple-600 transition duration-300">
+                        ➡️ Next Step
+                    </button>
+                </div>
+                
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-gray-700">Voice Speed</label>
+                    <input type="range" id="speech-rate" min="0.5" max="2" step="0.1" value="1" 
+                        class="w-full" onchange="adjustSpeechRate()">
+                </div>
+            </div>
+
+            <!-- Directions Display -->
+            <div id="directions" class="bg-gray-100 p-4 rounded text-sm max-h-60 overflow-y-auto"></div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js';
+        import { 
+            getFirestore, 
+            collection, 
+            addDoc, 
+            query, 
+            orderBy, 
+            limit, 
+            getDocs, 
+            deleteDoc 
+        } from 'https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js';
+
+        let map, directionsService, directionsRenderer, geocoder, recognition;
+        let currentDirections = [];
+        let speechSynthesis = window.speechSynthesis;
+        let currentUtterance = null;
+        let currentStepIndex = 0;
+
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyCYLKUR-T2z2LZ2v2liicywsuBhmY3Nz8I",
+            authDomain: "message-blind-stick.firebaseapp.com",
+            projectId: "message-blind-stick",
+            storageBucket: "message-blind-stick.firebasestorage.app",
+            messagingSenderId: "1041278794924",
+            appId: "1:1041278794924:web:1eea3811346ba1d933b309",
+            measurementId: "G-W8PTM3C9B4"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const locationsRef = collection(db, "user_locations");
+
+        function initMap() {
+            map = new google.maps.Map(document.createElement('div'), {
+                center: { lat: 37.773972, lng: -122.431297 },
+                zoom: 14
+            });
+            directionsService = new google.maps.DirectionsService();
+            directionsRenderer = new google.maps.DirectionsRenderer();
+            geocoder = new google.maps.Geocoder();
+        }
+
+        function toggleMicrophone() {
+            const micBtn = document.getElementById("mic-btn");
+            const endAddressInput = document.getElementById("end-address");
+
+            // Speech Recognition Setup
+            if (!recognition) {
+                recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+                recognition.lang = 'en-US';
+                recognition.continuous = false;
+                recognition.interimResults = false;
+                
+                recognition.onresult = function(event) {
+                    const transcript = event.results[0][0].transcript;
+                    endAddressInput.value = transcript;
+                    micBtn.classList.remove("bg-red-500");
+                    micBtn.classList.add("bg-blue-500");
+                    validateInputs();
+                    speakText(`Destination set to ${transcript}`);
+                };
+                
+                recognition.onstart = function() {
+                    micBtn.classList.remove("bg-blue-500");
+                    micBtn.classList.add("bg-red-500");
+                };
+                
+                recognition.onend = function() {
+                    micBtn.classList.remove("bg-red-500");
+                    micBtn.classList.add("bg-blue-500");
+                    recognition = null;
+                };
+
+                recognition.start();
+            } else {
+                recognition.stop();
+            }
+        }
+
+        function validateInputs() {
+            const startLat = document.getElementById("start-lat").value;
+            const startLng = document.getElementById("start-lng").value;
+            const endAddress = document.getElementById("end-address").value;
+            const routeBtn = document.getElementById("route-btn");
+            
+            routeBtn.disabled = !(startLat && startLng && endAddress);
+        }
+
+        function calculateAndSpeakDetailedRoute() {
+            const startLat = parseFloat(document.getElementById("start-lat").value);
+            const startLng = parseFloat(document.getElementById("start-lng").value);
+            const endAddress = document.getElementById("end-address").value;
+
+            geocoder.geocode({ address: endAddress }, function(results, status) {
+                if (status === google.maps.GeocoderStatus.OK) {
+                    const endLocation = results[0].geometry.location;
+                    const request = {
+                        origin: { lat: startLat, lng: startLng },
+                        destination: endLocation,
+                        travelMode: google.maps.TravelMode.WALKING
+                    };
+
+                    directionsService.route(request, function(result, status) {
+                        if (status === google.maps.DirectionsStatus.OK) {
+                            const steps = result.routes[0].legs[0].steps;
+                            const directionsPanel = document.getElementById("directions");
+                            
+                            // Detailed formatted directions with distances
+                            directionsPanel.innerHTML = steps
+                                .map((step, index) => 
+                                    `Step ${index + 1}: ${step.instructions} (${step.distance.text})`
+                                )
+                                .join('<br><br>');
+                            
+                            processDetailedRoute(steps);
+                            document.getElementById('voice-controls').classList.remove('hidden');
+                        } else {
+                            speakText("Failed to generate route");
+                        }
+                    });
+                } else {
+                    speakText("Could not find destination");
+                }
+            });
+        }
+
+        function processDetailedRoute(steps) {
+            currentDirections = steps.map((step, index) => ({
+                instruction: step.instructions.replace(/<[^>]*>/g, ""),
+                distance: step.distance.text
+            }));
+            
+            currentStepIndex = 0;
+            
+            const totalDistance = currentDirections.reduce((sum, step) => {
+                const numericDistance = parseFloat(step.distance.replace(/[^\d.]/g, ''));
+                return sum + numericDistance;
+            }, 0);
+
+            speakText(`Route generated. Total distance is ${totalDistance.toFixed(1)} kilometers. 
+                      Press 'Next Step' to start walking guidance.`);
+        }
+
+        function speakNextStep() {
+            if (currentStepIndex < currentDirections.length) {
+                const currentStep = currentDirections[currentStepIndex];
+                const speechText = `Step ${currentStepIndex + 1}: Walk ${currentStep.distance}. ${currentStep.instruction}`;
+                
+                speakText(speechText);
+                currentStepIndex++;
+            } else {
+                speakText("You have reached your destination");
+            }
+        }
+
+        function fetchAndDisplayLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(async (position) => {
+                    const { latitude, longitude } = position.coords;
+
+                    try {
+                        // Reverse Geocoding
+                        const apiKey = '7a3b208e6c454919afafe11fb6f36331';
+                        const apiUrl = `https://api.geoapify.com/v1/geocode/reverse?lat=${latitude}&lon=${longitude}&apiKey=${apiKey}`;
+                        
+                        const response = await fetch(apiUrl);
+                        const data = await response.json();
+
+                        let locationDetails = {
+                            latitude: latitude,
+                            longitude: longitude,
+                            timestamp: new Date()
+                        };
+
+                        if (data.features && data.features.length > 0) {
+                            const location = data.features[0].properties;
+                            locationDetails = {
+                                ...locationDetails,
+                                place: location.city || location.town || location.village || 'Unknown place',
+                                district: location.county || 'Unknown district',
+                                country: location.country || 'Unknown country',
+                                formatted_address: location.formatted || 'No address found'
+                            };
+                        }
+
+                        // Update UI elements
+                        document.getElementById('start-lat').value = latitude;
+                        document.getElementById('start-lng').value = longitude;
+                        
+                        const locationDesc = `${locationDetails.place}, ${locationDetails.country}`;
+                        document.getElementById('location-description').textContent = locationDesc;
+                        speakText(`Your current location is ${locationDesc}`);
+                        
+                        validateInputs();
+                    } catch (error) {
+                        console.error('Location fetch error:', error);
+                        speakText("Error retrieving location");
+                    }
+                }, (error) => {
+                    speakText("Location access denied");
+                });
+            }
+        }
+
+        function speakText(text) {
+            speechSynthesis.cancel();
+            currentUtterance = new SpeechSynthesisUtterance(text);
+            currentUtterance.lang = "en-US";
+            currentUtterance.rate = document.getElementById('speech-rate').value;
+            speechSynthesis.speak(currentUtterance);
+        }
+
+        function pauseDirections() {
+            speechSynthesis.pause();
+            speakText("Directions paused");
+        }
+
+        function resumeDirections() {
+            speechSynthesis.resume();
+            speakText("Resuming directions");
+        }
+
+        function repeatDirections() {
+            if (currentStepIndex > 0) currentStepIndex--;
+            speakNextStep();
+        }
+
+        function adjustSpeechRate() {
+            if (currentUtterance) {
+                currentUtterance.rate = document.getElementById('speech-rate').value;
+                speakText("Speech rate updated");
+            }
+        }
+
+        // Initialize on page load
+        window.onload = function() {
+            initMap();
+            fetchAndDisplayLocation();
+        };
+
+        // Expose functions to global scope
+        window.toggleMicrophone = toggleMicrophone;
+        window.calculateAndSpeakDetailedRoute = calculateAndSpeakDetailedRoute;
+        window.pauseDirections = pauseDirections;
+        window.resumeDirections = resumeDirections;
+        window.repeatDirections = repeatDirections;
+        window.adjustSpeechRate = adjustSpeechRate;
+        window.speakNextStep = speakNextStep;
+    </script>
+</body>
+</html>
