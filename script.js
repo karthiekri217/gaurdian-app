@@ -16,7 +16,7 @@ function startListening() {
                 window.location.href = "user.html"; // Redirect to user.html
             }else if (command.includes("navigation")) {
                 window.location.href = "map.html"; // Redirect to user.html
-            }else if (command.includes("color")) {
+            }else if (command.includes("colour")) {
                 window.location.href = "color.html"; // Redirect to user.html
             }else if (command.includes("money")) {
                 window.location.href = "money.html"; // Redirect to user.html
