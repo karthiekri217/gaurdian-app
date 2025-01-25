@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Speech to Text</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col justify-center items-center">
+  <h1 class="text-3xl font-bold mb-6">Speech to Text Transcription</h1>
+
+  <div id="latestMessage" class="mb-6 p-4 bg-white rounded shadow-md w-96">
+    <h2 class="text-xl font-semibold mb-2">Latest Message</h2>
+    <p id="messageText" class="text-gray-700">Loading latest message...</p>
+    <button id="replayButton" class="mt-2 bg-blue-500 text-white py-1 px-3 rounded hover:bg-blue-600">
+      Replay Message
+    </button>
+  </div>
+
+  <label for="language" class="mb-4 text-lg font-medium">Select Language:</label>
+  <select id="language" class="mb-6 p-2 border rounded shadow-md">
+    <option value="en-US">English (United States)</option>
+    <option value="hi-IN">Hindi (India)</option>
+    <option value="ta-IN">Tamil (India)</option>
+  </select>
+
+  <div class="space-y-4">
+    <button id="activate" class="bg-green-500 text-white py-2 px-4 rounded hover:bg-green-600">
+      Start Transcription
+    </button>
+    <button id="stop" class="bg-red-500 text-white py-2 px-4 rounded hover:bg-red-600">
+      Stop Transcription
+    </button>
+  </div>
+
+  <textarea id="transcription" 
+            class="mt-6 p-4 border rounded w-96 h-40 resize-none shadow-md"
+            placeholder="Transcribed text will appear here..." 
+            readonly></textarea>
+
+  <p id="status" class="mt-4 text-lg text-gray-700">Microphone status: <span class="font-bold">Inactive</span></p>
+<div id="live_location"> </div>
+
+
+<script>
+  async function fetchAndDisplayLocation() {
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(async (position) => {
+      const { latitude, longitude } = position.coords;
+
+      try {
+        // Firebase imports
+        const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js');
+        const { getFirestore, collection, addDoc, query, orderBy, limit, getDocs, deleteDoc } = await import('https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js');
+
+        // Firebase configuration
+        const firebaseConfig = {
+          apiKey: "AIzaSyCYLKUR-T2z2LZ2v2liicywsuBhmY3Nz8I",
+          authDomain: "message-blind-stick.firebaseapp.com",
+          projectId: "message-blind-stick",
+          storageBucket: "message-blind-stick.firebasestorage.app",
+          messagingSenderId: "1041278794924",
+          appId: "1:1041278794924:web:1eea3811346ba1d933b309",
+          measurementId: "G-W8PTM3C9B4"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const locationsRef = collection(db, "user_locations");
+
+        // Check current number of entries
+        const locationsQuery = query(locationsRef, orderBy("timestamp", "asc"));
+        const locationsSnapshot = await getDocs(locationsQuery);
+
+        // Remove oldest entries if more than 5
+        if (locationsSnapshot.size >= 5) {
+          const oldestDocs = locationsSnapshot.docs.slice(0, locationsSnapshot.size - 4);
+          for (const doc of oldestDocs) {
+            await deleteDoc(doc.ref);
+          }
+        }
+
+        // Reverse Geocoding
+        const apiKey = '7a3b208e6c454919afafe11fb6f36331'; 
+        const apiUrl = `https://api.geoapify.com/v1/geocode/reverse?lat=${latitude}&lon=${longitude}&apiKey=${apiKey}`;
+
+        const response = await fetch(apiUrl);
+        const data = await response.json();
+
+        let locationDetails = {
+          latitude: latitude,
+          longitude: longitude,
+          timestamp: new Date()
+        };
+
+        if (data.features && data.features.length > 0) {
+          const location = data.features[0].properties;
+          locationDetails = {
+            ...locationDetails,
+            place: location.city || location.town || location.village || 'Unknown place',
+            district: location.county || 'Unknown district',
+            country: location.country || 'Unknown country',
+            formatted_address: location.formatted || 'No address found'
+          };
+        }
+
+        // Save new location data
+        await addDoc(locationsRef, locationDetails);
+
+        // Display location
+        const liveLocationDiv = document.getElementById('live_location');
+        liveLocationDiv.innerHTML = `
+          Latitude: ${locationDetails.latitude}, 
+          Longitude: ${locationDetails.longitude}, 
+          Place: ${locationDetails.place || 'N/A'}, 
+          District: ${locationDetails.district || 'N/A'}, 
+          Country: ${locationDetails.country || 'N/A'}
+        `;
+
+      } catch (error) {
+        console.error('Error managing location data:', error);
+      }
+    });
+  }
+}
+
+fetchAndDisplayLocation();
+</script>
+
+  <script type="module">
+    // Import Firebase
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js';
+    import { getFirestore, collection, addDoc, query, orderBy, limit, getDocs } from 'https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js';
+
+    // Your Firebase configuration
+    const firebaseConfig = {
+      apiKey: "AIzaSyCYLKUR-T2z2LZ2v2liicywsuBhmY3Nz8I",
+      authDomain: "message-blind-stick.firebaseapp.com",
+      projectId: "message-blind-stick",
+      storageBucket: "message-blind-stick.firebasestorage.app",
+      messagingSenderId: "1041278794924",
+      appId: "1:1041278794924:web:1eea3811346ba1d933b309",
+      measurementId: "G-W8PTM3C9B4"
+    };
+
+    // Initialize Firebase
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    // DOM elements
+    const activateButton = document.getElementById("activate");
+    const stopButton = document.getElementById("stop");
+    const transcriptionBox = document.getElementById("transcription");
+    const statusText = document.getElementById("status");
+    const languageSelector = document.getElementById("language");
+    const messageText = document.getElementById("messageText");
+    const replayButton = document.getElementById("replayButton");
+
+    // Initialize speech synthesis
+    const speechSynthesis = window.speechSynthesis;
+    let currentUtterance = null;
+
+    // Function to speak text
+    function speakText(text, lang) {
+      // Cancel any ongoing speech
+      speechSynthesis.cancel();
+
+      // Create new utterance
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = lang;
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
+      currentUtterance = utterance;
+
+      // Speak the text
+      speechSynthesis.speak(utterance);
+    }
+
+    // Fetch latest message and play audio
+    async function fetchLatestMessage() {
+      try {
+        const q = query(
+          collection(db, "message-send"),
+          orderBy("timestamp", "desc"),
+          limit(1)
+        );
+
+        const querySnapshot = await getDocs(q);
+        
+        if (!querySnapshot.empty) {
+          const latestDoc = querySnapshot.docs[0];
+          const data = latestDoc.data();
+          messageText.textContent = data.text;
+          
+          // Automatically play the message
+          speakText(data.text, languageSelector.value);
+        } else {
+          messageText.textContent = "No messages found";
+        }
+      } catch (error) {
+        console.error("Error fetching latest message:", error);
+        messageText.textContent = "Error loading message";
+      }
+    }
+
+    // Call fetchLatestMessage when the page loads
+    fetchLatestMessage();
+
+    // Add replay button functionality
+    replayButton.addEventListener("click", () => {
+      const text = messageText.textContent;
+      if (text && text !== "Loading latest message..." && text !== "No messages found" && text !== "Error loading message") {
+        speakText(text, languageSelector.value);
+      }
+    });
+
+    // Update speech when language changes
+    languageSelector.addEventListener("change", () => {
+      const text = messageText.textContent;
+      if (text && text !== "Loading latest message..." && text !== "No messages found" && text !== "Error loading message") {
+        speakText(text, languageSelector.value);
+      }
+    });
+
+    let recognition;
+    let isActive = false;
+
+    // Initialize Speech Recognition
+    if (!("webkitSpeechRecognition" in window) && !("SpeechRecognition" in window)) {
+      alert("Speech Recognition API not supported in this browser.");
+    } else {
+      recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+
+      recognition.onstart = () => {
+        statusText.innerHTML = "Microphone status: <span class='font-bold text-green-500'>Active</span>";
+        isActive = true;
+      };
+
+      recognition.onresult = async (event) => {
+        let interimTranscript = "";
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            const finalTranscript = event.results[i][0].transcript.trim();
+            transcriptionBox.value += finalTranscript + " ";
+
+            try {
+              // Save to Firestore
+              await addDoc(collection(db, "transcriptions"), {
+                text: finalTranscript,
+                language: recognition.lang,
+                timestamp: new Date()
+              });
+              console.log("Transcription saved to Firestore");
+            } catch (error) {
+              console.error("Error saving to Firestore:", error);
+            }
+          } else {
+            interimTranscript += event.results[i][0].transcript.trim() + " ";
+          }
+        }
+      };
+
+      recognition.onend = () => {
+        statusText.innerHTML = "Microphone status: <span class='font-bold text-gray-500'>Inactive</span>";
+        isActive = false;
+      };
+
+      recognition.onerror = (event) => {
+        statusText.innerHTML = `Microphone error: <span class='font-bold text-red-500'>${event.error}</span>`;
+        console.error('Speech Recognition Error:', event.error);
+      };
+    }
+
+    // Event Listeners
+    activateButton.addEventListener("click", () => {
+      if (recognition && !isActive) {
+        recognition.lang = languageSelector.value;
+        recognition.start();
+        transcriptionBox.value = "";
+      }
+    });
+
+    stopButton.addEventListener("click", () => {
+      if (recognition && isActive) {
+        recognition.stop();
+      }
+    });
+  </script>
+</body>
+</html>

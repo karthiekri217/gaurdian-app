@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Object Detection</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h1>Real-Time Object Detection</h1>
+    </header>
+    <main>
+        <video id="video" autoplay muted playsinline></video>
+        <div id="info">
+            <h2>Detected Objects:</h2> 
+            <ul id="object-list"></ul>
+        </div>
+        <p id="result">Initializing...</p>
+    </main>
+    <footer>
+        <p>&copy; 2025 Object Detection App</p>
+    </footer>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+    <script src="app.js"></script>
+</body>
+</html>
