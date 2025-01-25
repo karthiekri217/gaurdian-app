@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prominent Color Detector</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f4f8;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        h1 {
+            color: #007bff;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        #camera-container {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            border-radius: 10px;
+            overflow: hidden;
+            border: 3px solid #007bff;
+        }
+
+        video {
+            width: 640px;
+            height: 480px;
+            object-fit: cover;
+        }
+
+        #canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 640px;
+            height: 480px;
+            display: none;
+        }
+
+        .color-display {
+            background-color: #fff;
+            padding: 15px 25px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            margin-top: 20px;
+            text-align: center;
+            width: 320px;
+            font-size: 20px;
+            font-weight: bold;
+            color: #333;
+            border: 2px solid #007bff;
+        }
+
+        .color-box {
+            margin-top: 15px;
+            width: 100px;
+            height: 100px;
+            border-radius: 5px;
+            margin: 10px auto;
+            border: 2px solid #007bff;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Prominent Color Detector</h1>
+
+    <!-- Video and Canvas Container -->
+    <div id="camera-container">
+        <video id="video" autoplay></video>
+        <canvas id="canvas"></canvas>
+    </div>
+
+    <!-- Color Display Section -->
+    <div class="color-display">
+        Most Prominent Color: <span id="color-name">Loading...</span>
+    </div>
+    <div id="color-box" class="color-box"></div>
+
+    <script>
+        const videoElement = document.getElementById('video');
+        const canvasElement = document.getElementById('canvas');
+        const colorNameElement = document.getElementById('color-name');
+        const colorBoxElement = document.getElementById('color-box');
+
+        const context = canvasElement.getContext('2d');
+
+        // Access camera
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(stream => {
+                videoElement.srcObject = stream;
+            })
+            .catch(err => {
+                console.error('Error accessing the camera: ', err);
+            });
+
+        function detectColor() {
+            // Draw the current video frame onto the canvas
+            context.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
+
+            // Get the pixel data from the canvas
+            const imageData = context.getImageData(0, 0, canvasElement.width, canvasElement.height);
+            const data = imageData.data;
+
+            // Calculate the frequency of each color
+            const colorCount = {};
+            for (let i = 0; i < data.length; i += 4) {
+                const r = data[i];
+                const g = data[i + 1];
+                const b = data[i + 2];
+                const rgb = `${r},${g},${b}`;
+
+                if (!colorCount[rgb]) {
+                    colorCount[rgb] = 1;
+                } else {
+                    colorCount[rgb]++;
+                }
+            }
+
+            // Find the most frequent color
+            let maxCount = 0;
+            let mostProminentColor = '';
+            for (const color in colorCount) {
+                if (colorCount[color] > maxCount) {
+                    maxCount = colorCount[color];
+                    mostProminentColor = color;
+                }
+            }
+
+            // Update the UI with the most prominent color
+            const [r, g, b] = mostProminentColor.split(',').map(Number);
+            colorNameElement.textContent = `rgb(${r}, ${g}, ${b})`;
+            colorBoxElement.style.backgroundColor = `rgb(${r}, ${g}, ${b})`;
+        }
+
+        // Continuously detect the prominent color every 500 milliseconds
+        setInterval(detectColor, 500);
+    </script>
+
+</body>
+</html>

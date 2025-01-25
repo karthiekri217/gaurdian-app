@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Indian Currency Recognition</title>
+    <!-- Include Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-KyZXEJv3o0OVR1Tg99mz8k5QJf6jZzBHzP2VY7G4V3f7ZIsAqfDi1kLhdW1dsz5p" crossorigin="anonymous">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f8ff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .container {
+            max-width: 800px;
+            padding: 20px;
+            text-align: center;
+            background-color: #fff;
+            box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
+            border-radius: 10px;
+        }
+        .card {
+            padding: 20px;
+            box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
+            border-radius: 10px;
+        }
+        #video {
+            border: 3px solid #007bff;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        #result {
+            font-size: 20px;
+            color: #007bff;
+        }
+        #loading {
+            display: none;
+        }
+        .btn-blue {
+            background-color: #007bff;
+            border-color: #007bff;
+        }
+        .btn-blue:hover {
+            background-color: #0056b3;
+            border-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2 class="text-center mb-4">Indian Currency Recognition (Live Camera Feed)</h2>
+
+    <!-- Camera Feed Section -->
+    <div class="card">
+        <div class="card-body">
+            <h5 class="card-title">Live Camera Feed</h5>
+            <video id="video" width="100%" height="auto" autoplay></video>
+        </div>
+    </div>
+
+    <!-- Action Button Section -->
+    <div class="text-center mb-3">
+        <button class="btn btn-blue" onclick="captureAndRecognize()">Capture and Recognize</button>
+    </div>
+
+    <!-- Loading Spinner Section -->
+    <div id="loading" class="text-center mb-3">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+
+    <!-- Result Section -->
+    <div class="card">
+        <div class="card-body">
+            <h5 class="card-title">Recognition Result</h5>
+            <div id="result" class="text-center">Waiting for recognition...</div>
+        </div>
+    </div>
+</div>
+
+<!-- Include Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js" integrity="sha384-pzjw8f+ua7Kw1TIq0v8FqfXRjAJgJYWhxWzkl1gOdohwtmwp6DBqg2Nd61yCoJ8I" crossorigin="anonymous"></script>
+
+<script>
+// Access the webcam
+async function startCamera() {
+    const videoElement = document.getElementById('video');
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    videoElement.srcObject = stream;
+}
+
+// Capture the current frame from the video feed
+function captureAndRecognize() {
+    const videoElement = document.getElementById('video');
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    canvas.width = videoElement.videoWidth;
+    canvas.height = videoElement.videoHeight;
+    context.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+
+    // Show loading spinner
+    document.getElementById('loading').style.display = 'block';
+    document.getElementById('result').innerHTML = 'Processing...';
+
+    // Convert the canvas image to Blob
+    canvas.toBlob(blob => {
+        const formData = new FormData();
+        formData.append('image', blob);
+
+        // Send the image to the backend for processing
+        fetch('http://localhost:5000/recognize', {
+            method: 'POST',
+            body: formData,
+        })
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('result').innerHTML = 'Recognized Currency: ' + data.currency;
+        })
+        .catch(error => {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('result').innerHTML = 'Error: ' + error.message;
+        });
+    });
+}
+
+// Start the camera when the page loads
+window.onload = startCamera;
+</script>
+
+</body>
+</html>
